@@ -8,7 +8,7 @@ BEGIN {require 5.006;}
 
 require Exporter;
 use ExtUtils::MakeMaker::Config;
-use Carp ();
+use Carp;
 use File::Path;
 
 our $Verbose = 0;       # exported
@@ -19,7 +19,8 @@ our @Overridable;
 my @Prepend_parent;
 my %Recognized_Att_Keys;
 
-our $VERSION = '6.56';
+our $VERSION = '6.57_11';
+$VERSION = eval $VERSION;
 
 # Emulate something resembling CVS $Revision$
 (our $Revision = $VERSION) =~ s{_}{};
@@ -48,11 +49,13 @@ require ExtUtils::MY;  # XXX pre-5.8 versions of ExtUtils::Embed expect
 
 
 sub WriteMakefile {
-    Carp::croak "WriteMakefile: Need even number of args" if @_ % 2;
+    croak "WriteMakefile: Need even number of args" if @_ % 2;
 
     require ExtUtils::MY;
     my %att = @_;
 
+    _convert_compat_attrs(\%att);
+    
     _verify_att(\%att);
 
     my $mm = MM->new(\%att);
@@ -67,6 +70,7 @@ sub WriteMakefile {
 # scalar.
 my %Att_Sigs;
 my %Special_Sigs = (
+ AUTHOR             => 'ARRAY',
  C                  => 'ARRAY',
  CONFIG             => 'ARRAY',
  CONFIGURE          => 'CODE',
@@ -112,6 +116,19 @@ my %Special_Sigs = (
 @Att_Sigs{keys %Recognized_Att_Keys} = ('') x keys %Recognized_Att_Keys;
 @Att_Sigs{keys %Special_Sigs} = values %Special_Sigs;
 
+sub _convert_compat_attrs { #result of running several times should be same
+    my($att) = @_;
+    if (exists $att->{AUTHOR}) {
+        if ($att->{AUTHOR}) {
+            if (!ref($att->{AUTHOR})) {
+                my $t = $att->{AUTHOR};
+                $att->{AUTHOR} = [$t];
+            }
+        } else {
+                $att->{AUTHOR} = [];
+        }
+    }
+}
 
 sub _verify_att {
     my($att) = @_;
@@ -161,7 +178,7 @@ sub _format_att {
 
 sub prompt ($;$) {  ## no critic
     my($mess, $def) = @_;
-    Carp::confess("prompt function called without an argument") 
+    confess("prompt function called without an argument") 
         unless defined $mess;
 
     my $isa_tty = -t STDIN && (-t STDOUT || !(-f STDOUT || -c STDOUT)) ;
@@ -209,7 +226,7 @@ sub eval_in_subdirs {
 
 sub eval_in_x {
     my($self,$dir) = @_;
-    chdir $dir or Carp::carp("Couldn't change to directory $dir: $!");
+    chdir $dir or carp("Couldn't change to directory $dir: $!");
 
     {
         package main;
@@ -258,8 +275,8 @@ sub full_setup {
     INC INCLUDE_EXT LDFROM LIB LIBPERL_A LIBS LICENSE
     LINKTYPE MAKE MAKEAPERL MAKEFILE MAKEFILE_OLD MAN1PODS MAN3PODS MAP_TARGET
     META_ADD META_MERGE MIN_PERL_VERSION BUILD_REQUIRES CONFIGURE_REQUIRES
-    MYEXTLIB NAME NEEDS_LINKING NOECHO NO_META NORECURS NO_VC OBJECT OPTIMIZE 
-    PERL_MALLOC_OK PERL PERLMAINCC PERLRUN PERLRUNINST PERL_CORE
+    MYEXTLIB NAME NEEDS_LINKING NOECHO NO_META NO_MYMETA NORECURS NO_VC OBJECT
+    OPTIMIZE PERL_MALLOC_OK PERL PERLMAINCC PERLRUN PERLRUNINST PERL_CORE
     PERL_SRC PERM_DIR PERM_RW PERM_RWX
     PL_FILES PM PM_FILTER PMLIBDIRS PMLIBPARENTDIRS POLLUTE PPM_INSTALL_EXEC
     PPM_INSTALL_SCRIPT PREREQ_FATAL PREREQ_PM PREREQ_PRINT PRINT_PREREQ
@@ -386,6 +403,8 @@ sub new {
     my($class,$self) = @_;
     my($key);
 
+    _convert_compat_attrs($self) if defined $self && $self;
+
     # Store the original args passed to WriteMakefile()
     foreach my $k (keys %$self) {
         $self->{ARGS}{$k} = $self->{$k};
@@ -393,12 +412,16 @@ sub new {
 
     $self = {} unless defined $self;
 
-    $self->{PREREQ_PM}      ||= {};
-    $self->{BUILD_REQUIRES} ||= {};
-
     # Temporarily bless it into MM so it can be used as an
     # object.  It will be blessed into a temp package later.
     bless $self, "MM";
+
+    # Cleanup all the module requirement bits
+    for my $key (qw(PREREQ_PM BUILD_REQUIRES CONFIGURE_REQUIRES)) {
+        $self->{$key}      ||= {};
+        $self->clean_versions( $key );
+    }
+
 
     if ("@ARGV" =~ /\bPREREQ_PRINT\b/) {
         $self->_PREREQ_PRINT;
@@ -410,7 +433,7 @@ sub new {
    }
 
     print STDOUT "MakeMaker (v$VERSION)\n" if $Verbose;
-    if (-f "MANIFEST" && ! -f "Makefile"){
+    if (-f "MANIFEST" && ! -f "Makefile" && ! $ENV{PERL_CORE}){
         check_manifest();
     }
 
@@ -431,7 +454,7 @@ sub new {
     };
     if (!$perl_version_ok) {
         if (!defined $perl_version_ok) {
-            warn <<'END';
+            die <<'END';
 Warning: MIN_PERL_VERSION is not in a recognized format.
 Recommended is a quoted numerical value like '5.005' or '5.008001'.
 END
@@ -468,14 +491,16 @@ END
         if (!$installed_file) {
             warn sprintf "Warning: prerequisite %s %s not found.\n", 
               $prereq, $required_version
-                   unless $self->{PREREQ_FATAL};
+                   unless $self->{PREREQ_FATAL}
+                       or $ENV{PERL_CORE};
 
             $unsatisfied{$prereq} = 'not installed';
         }
         elsif ($pr_version < $required_version ){
             warn sprintf "Warning: prerequisite %s %s not found. We have %s.\n",
               $prereq, $required_version, ($pr_version || 'unknown version') 
-                  unless $self->{PREREQ_FATAL};
+                  unless $self->{PREREQ_FATAL}
+                       or $ENV{PERL_CORE};
 
             $unsatisfied{$prereq} = $required_version ? $required_version : 'unknown version' ;
         }
@@ -495,15 +520,16 @@ END
     if (defined $self->{CONFIGURE}) {
         if (ref $self->{CONFIGURE} eq 'CODE') {
             %configure_att = %{&{$self->{CONFIGURE}}};
+            _convert_compat_attrs(\%configure_att);
             $self = { %$self, %configure_att };
         } else {
-            Carp::croak "Attribute 'CONFIGURE' to WriteMakefile() not a code reference\n";
+            croak "Attribute 'CONFIGURE' to WriteMakefile() not a code reference\n";
         }
     }
 
     # This is for old Makefiles written pre 5.00, will go away
     if ( Carp::longmess("") =~ /runsubdirpl/s ){
-        Carp::carp("WARNING: Please rerun 'perl Makefile.PL' to regenerate your Makefiles\n");
+        carp("WARNING: Please rerun 'perl Makefile.PL' to regenerate your Makefiles\n");
     }
 
     my $newclass = ++$PACKNAME;
@@ -674,11 +700,11 @@ END
 }
 
 sub WriteEmptyMakefile {
-    Carp::croak "WriteEmptyMakefile: Need an even number of args" if @_ % 2;
+    croak "WriteEmptyMakefile: Need an even number of args" if @_ % 2;
 
     my %att = @_;
     my $self = MM->new(\%att);
-    
+
     my $new = $self->{MAKEFILE};
     my $old = $self->{MAKEFILE_OLD};
     if (-f $old) {
@@ -704,7 +730,7 @@ EOP
 }
 
 
-#line 719
+#line 745
 
 sub _installed_file_for_module {
     my $class  = shift;
@@ -986,16 +1012,24 @@ sub flush {
         or die "Unable to open MakeMaker.tmp: $!";
 
     for my $chunk (@{$self->{RESULT}}) {
-        print $fh "$chunk\n";
+        print $fh "$chunk\n"
+            or die "Can't write to MakeMaker.tmp: $!";
     }
 
-    close $fh;
+    close $fh
+        or die "Can't write to MakeMaker.tmp: $!";
     _rename("MakeMaker.tmp", $finalname) or
       warn "rename MakeMaker.tmp => $finalname: $!";
     chmod 0644, $finalname unless $Is_VMS;
 
-    my %keep = map { ($_ => 1) } qw(NEEDS_LINKING HAS_LINK_CODE);
+    unless ($self->{NO_MYMETA}) {
+        # Write MYMETA.yml to communicate metadata up to the CPAN clients
+        if ( $self->write_mymeta( $self->mymeta ) ) {;
+            print STDOUT "Writing MYMETA.yml and MYMETA.json\n";
+        }
 
+    }
+    my %keep = map { ($_ => 1) } qw(NEEDS_LINKING HAS_LINK_CODE);
     if ($self->{PARENT} && !$self->{_KEEP_AFTER_FLUSH}) {
         foreach (keys %$self) { # safe memory
             delete $self->{$_} unless $keep{$_};
@@ -1004,7 +1038,6 @@ sub flush {
 
     system("$Config::Config{eunicefix} $finalname") unless $Config::Config{eunicefix} eq ":";
 }
-
 
 # This is a rename for OS's where the target must be unlinked first.
 sub _rename {
@@ -1066,6 +1099,22 @@ sub neatvalue {
     return "{ ".join(', ',@m)." }";
 }
 
+# Look for weird version numbers, warn about them and set them to 0
+# before CPAN::Meta chokes.
+sub clean_versions {
+    my($self, $key) = @_;
+
+    my $reqs = $self->{$key};
+    for my $module (keys %$reqs) {
+        my $version = $reqs->{$module};
+
+        if( !defined $version or $version !~ /^[\d_\.]+$/ ) {
+            carp "Unparsable version '$version' for prerequisite $module";
+            $reqs->{$module} = 0;
+        }
+    }
+}
+
 sub selfdocument {
     my($self) = @_;
     my(@m);
@@ -1086,4 +1135,4 @@ sub selfdocument {
 
 __END__
 
-#line 2807
+#line 2882
