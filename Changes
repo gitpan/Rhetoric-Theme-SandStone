@@ -1,5 +1,8 @@
 Revision history for Perl extension Rhetoric::Theme::Sandstone
 
+0.07 Fri May 27 18:37:41 PDT 2011
+  - css fixes
+
 0.06 Wed May 25 22:22:03 PDT 2011
   - hopefully fixed the ExtUtils::MakeMaker issue
 
