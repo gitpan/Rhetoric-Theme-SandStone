@@ -1,5 +1,9 @@
 Revision history for Perl extension Rhetoric::Theme::Sandstone
 
+0.08 Fri May 27 19:23:05 PDT 2011
+  - got rid of dependency on Data::Dump
+  - added a tiny bit of documentation
+
 0.07 Fri May 27 18:37:41 PDT 2011
   - css fixes
 

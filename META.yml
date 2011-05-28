@@ -1,5 +1,5 @@
 ---
-abstract: ~
+abstract: 'a dark theme for Rhetoric blogs'
 author:
   - 'John BEPPU <beppu {at} cpan.org>'
 build_requires:
@@ -27,4 +27,4 @@ requires:
 resources:
   license: http://dev.perl.org/licenses/
   repository: git://github.com/beppu/rhetoric-theme-sandstone.git
-version: 0.07
+version: 0.08

@@ -1,13 +1,14 @@
 package Rhetoric::Theme::SandStone;
 use strict;
 use warnings;
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 use Squatting::View;
 use Method::Signatures::Simple;
-use Data::Dump 'pp';
 
 our $view = Squatting::View->new(
+
   'SandStone',
+
   _init => method($include_path) {
     $self->{tt} = Template->new({
       INCLUDE_PATH => $include_path,
@@ -38,21 +39,23 @@ __END__
 
 =head1 NAME
 
-Rhetoric::Theme::Sandstone -
+Rhetoric::Theme::SandStone - a dark theme for Rhetoric blogs
 
 =head1 SYNOPSIS
 
-  use Rhetoric::Theme::Sandstone;
+  use Rhetoric::Theme::SandStone;
 
 =head1 DESCRIPTION
 
-Rhetoric::Theme::Sandstone is
+Rhetoric::Theme::SandStone is based on the SandStone theme from Free CSS Templates.
+
+=head1 SEE ALSO
+
+L<http://www.freecsstemplates.org/preview/sandstone/>
 
 =head1 AUTHOR
 
 John BEPPU E<lt>beppu {at} cpan.orgE<gt>
-
-=head1 SEE ALSO
 
 =head1 LICENSE
 
